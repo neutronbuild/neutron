@@ -1,0 +1,38 @@
+ova:
+  name: neutron-ova
+disks:
+  - name: root
+    size: 20
+    mountpoint: /
+  - name: data
+    size: 50
+    mountpoint: /data
+cache:
+  files:
+    - name: harbor
+      url: https://example.com/harbor.tgz
+    - name: vicui 
+      local: ../bin/vic_ui_XXXX.tar.gz
+  images:
+    - docker.io/vmware/dch-photon:${BUILD_DCHPHOTON_VERSION}
+    - docker.io/vmware/registry:2.6.2-photon
+provisioners:
+  - type: shell,
+    script: scripts/provisioners/package_provisioning.sh
+  - type: shell,
+    script: scripts/provisioners/filesystem_provisioning.sh
+  - type: shell,
+    script: scripts/provisioners/provision_govc.sh
+  - type: shell,
+    script: scripts/provisioners/system_settings.sh
+
+  # TODO(morris-jason): pull these in as versioned artifacts
+  - type: file,
+    source: ../bin/ovfenv,
+    destination: /usr/bin/ovfenv
+  - type: file,
+    source: ../bin/dcui,
+    destination: /usr/bin/dcui
+  - type: file,
+    source: ../bin/rpctool,
+    destination: /usr/bin/rpctool

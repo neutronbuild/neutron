@@ -1,0 +1,13 @@
+[Unit]
+Description=Appliance TLS Certificate
+Documentation=https://github.com/neutronbuild/neutron
+After=appliance-mounts.target resizefs.service appliance-environment.service
+Requires=appliance-mounts.target resizefs.service appliance-environment.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/vmware/environment
+ExecStart=/etc/vmware/appliance-tls.sh
+
+[Install]
+WantedBy=appliance.target

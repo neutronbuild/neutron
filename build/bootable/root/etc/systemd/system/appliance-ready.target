@@ -1,0 +1,18 @@
+[Unit]
+Description=Target notifying dependent units that basic services are available.
+Documentation=https://github.com/neutronbuild/neutron/blob/master/docs/DESIGN.md
+
+Requires=appliance-mounts.target appliance-environment.service appliance-load-docker-images.service
+After=appliance-mounts.target appliance-environment.service appliance-load-docker-images.service
+
+Requires=appliance-tls.service
+After=appliance-tls.service
+
+Requires=network-online.target systemd-resolved.service systemd-timesyncd.service
+After=network-online.target systemd-resolved.service systemd-timesyncd.service
+
+Requires=appliance-network.service appliance-firewall.service
+After=appliance-network.service appliance-firewall.service
+
+[Install]
+WantedBy=appliance.target

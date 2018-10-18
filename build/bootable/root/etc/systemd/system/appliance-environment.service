@@ -1,0 +1,12 @@
+[Unit]
+Description=Appliance Environment
+Documentation=https://github.com/neutronbuild/neutron
+Requires=appliance-network.service network-online.target
+After=appliance-network.service network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/etc/vmware/appliance-environment.sh
+
+[Install]
+WantedBy=appliance-ready.target
