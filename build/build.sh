@@ -21,10 +21,10 @@ set -e -o pipefail +h && [ -n "$DEBUG" ] && set -x
 ROOT_DIR="$GOPATH/src/github.com/neutronbuild/neutron/"
 ROOT_WORK_DIR="/go/src/github.com/neutronbuild/neutron/"
 
-TAG=$(git describe --abbrev=0 --tags) # e.g. `v0.9.0`
+TAG=$(git describe --abbrev=0 --tags || true) # e.g. `v0.9.0`
 REV=$(git rev-parse --short=8 HEAD)
-BUILD_OVA_REVISION="${TAG}-${DRONE_BUILD_NUMBER}-${REV}"
-BUILD_NUMBER=${DRONE_BUILD_NUMBER:-}
+BUILD_OVA_REVISION="${TAG}-${BUILD_NUMBER}-${REV}"
+BUILD_NUMBER=${BUILD_NUMBER:-}
 
 function usage() {
     echo -e "Usage:

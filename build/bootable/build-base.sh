@@ -19,6 +19,71 @@ set -e -o pipefail +h && [ -n "$DEBUG" ] && set -x
 DIR=$(dirname "$(readlink -f "$0")")
 . "${DIR}/log.sh"
 
+# TODO(morris-jason) merge with https://github.com/vmware/photon/blob/2.0-Update104/common/data/packages_full.json
+# TODO(morris-jason) use normal kernel
+packages=(
+  filesystem
+  bash
+  shadow
+  coreutils
+  findutils
+  systemd
+  util-linux
+  pkgconfig
+  dbus
+  cpio
+  photon-release
+  tdnf
+  openssh
+  linux-esx
+  sed
+  gzip
+  zip
+  tar
+  xz
+  bzip2
+  glibc
+  iana-etc
+  ca-certificates
+  curl
+  which
+  initramfs
+  krb5
+  motd
+  procps-ng
+  bc
+  kmod
+  libdb
+  glibc-lang
+  vim
+  haveged
+  ethtool
+  gawk
+  socat
+  git
+  nfs-utils
+  cifs-utils
+  ebtables
+  iproute2
+  iptables
+  iputils
+  cdrkit
+  xfsprogs
+  sudo
+  lvm2
+  parted
+  gptfdisk
+  e2fsprogs
+  docker-17.12.1-1.ph1
+  gzip
+  net-tools
+  logrotate
+  sshpass
+  open-vm-tools
+  openjre
+  python-pip
+)
+
 function set_base() {
   src="${1}"
   rt="${2}"
@@ -32,48 +97,22 @@ function set_base() {
   rpm --root "${rt}/" --initdb
   rpm --root "${rt}/" --import "${rt}/etc/pki/rpm-gpg/VMWARE-RPM-GPG-KEY"
 
+  log3 "configuring ${brprpl}yum repos${reset}"
+  mkdir -p "${rt}/etc/yum.repos.d/"
+  rm /etc/yum.repos.d/{photon,photon-updates}.repo
+  cp "${DIR}"/repo/*-remote.repo /etc/yum.repos.d/
+  cp -a /etc/yum.repos.d/ "${rt}/etc/"
+
   log3 "configuring temporary ${brprpl}resolv.conf${reset}"
   cp /etc/resolv.conf "${rt}/etc/"
 
   log3 "verifying yum and tdnf setup"
   tdnf repolist --refresh
 
-  log3 "installing ${brprpl}filesystem bash shadow coreutils findutils${reset}"
+  log3 "installing ${brprpl}tdnf packages${reset}"
   tdnf install --installroot "${rt}/" --refresh -y \
-    filesystem bash shadow coreutils findutils
+    $(printf " %s" "${packages[@]}")
 
-  log3 "installing ${brprpl}systemd linux-esx tdnf ca-certificates sed gzip tar glibc${reset}"
-  tdnf install --installroot "${rt}/" --refresh -y \
-    systemd util-linux \
-    pkgconfig dbus cpio\
-    photon-release tdnf \
-    openssh linux-esx sed \
-    gzip zip tar xz bzip2 \
-    glibc iana-etc \
-    ca-certificates \
-    curl which initramfs \
-    krb5 motd procps-ng \
-    bc kmod libdb
-
-  log3 "installing ${brprpl}tzdata glibc-lang vim${reset}"
-  tdnf install --installroot "${rt}/" --refresh -y \
-    tzdata glibc-lang vim
-
-  log3 "installing system dependencies"
-  tdnf install --installroot "${rt}/" --refresh -y \
-    haveged ethtool gawk \
-    socat git nfs-utils \
-    cifs-utils ebtables \
-    iproute2 iptables iputils \
-    cdrkit xfsprogs sudo \
-    lvm2 parted gptfdisk \
-    e2fsprogs docker-17.12.1-1.ph1 gzip \
-    net-tools logrotate sshpass \
-    open-vm-tools
-
-  log3 "installing package dependencies"
-  tdnf install --installroot "${rt}/" --refresh -y \
-    openjre python-pip
 
   log3 "installing pyyaml"
   pip install pyyaml
@@ -118,9 +157,3 @@ fi
 log2 "install OS to ${ROOT}"
 
 set_base "${DIR}" "${ROOT}"
-
-# TODO: Use local yum repo in CI
-# log3 "reset yum repos to remote"
-# REPOS=$(find ${IMG1ROOT}/etc/yum.repos.d/ | grep -E "*-remote.repo|*-local.repo")
-# [ -n "$REPOS" ] && echo $REPOS | while read repo; do rm $repo; done
-# cp repo/*-remote.repo "${IMG1ROOT}/etc/yum.repos.d/"

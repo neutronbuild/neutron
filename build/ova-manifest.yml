@@ -1,5 +1,8 @@
+# this is not the manifest you are looking for.
+# you can go about your business.
 ova:
   name: neutron-ova
+kernel: linux
 disks:
   - name: root
     size: 20
@@ -17,15 +20,6 @@ cache:
     - docker.io/vmware/dch-photon:${BUILD_DCHPHOTON_VERSION}
     - docker.io/vmware/registry:2.6.2-photon
 provisioners:
-  - type: shell,
-    script: scripts/provisioners/package_provisioning.sh
-  - type: shell,
-    script: scripts/provisioners/filesystem_provisioning.sh
-  - type: shell,
-    script: scripts/provisioners/provision_govc.sh
-  - type: shell,
-    script: scripts/provisioners/system_settings.sh
-
   # TODO(morris-jason): pull these in as versioned artifacts
   - type: file,
     source: ../bin/ovfenv,
