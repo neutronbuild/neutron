@@ -32,17 +32,7 @@ function set_base() {
   rpm --root "${rt}/" --initdb
   rpm --root "${rt}/" --import "${rt}/etc/pki/rpm-gpg/VMWARE-RPM-GPG-KEY"
 
-  log3 "configuring ${brprpl}yum repos${reset}"
-  mkdir -p "${rt}/etc/yum.repos.d/"
-  rm /etc/yum.repos.d/{photon,photon-updates}.repo
-  cp "${DIR}"/repo/*-remote.repo /etc/yum.repos.d/
-  # TODO: Use local yum repo in CI
-  # if [[ $DRONE_BUILD_NUMBER && $DRONE_BUILD_NUMBER > 0 ]]; then
-  #   mkdir -p /etc/yum.repos.d.old/
-  #   mv /etc/yum.repos.d/* /etc/yum.repos.d.old/
-  #   cp repo/*-local.repo /etc/yum.repos.d/
-  # fi
-  cp -a /etc/yum.repos.d/ "${rt}/etc/"
+  log3 "configuring temporary ${brprpl}resolv.conf${reset}"
   cp /etc/resolv.conf "${rt}/etc/"
 
   log3 "verifying yum and tdnf setup"
@@ -84,6 +74,18 @@ function set_base() {
   log3 "installing package dependencies"
   tdnf install --installroot "${rt}/" --refresh -y \
     openjre python-pip
+
+  log3 "installing pyyaml"
+  pip install pyyaml
+
+  log3 "installing - docker compose"
+  # TODO(morris-jason) find some way to configure these versions
+  curl -o /usr/local/bin/docker-compose -L'#' "https://github.com/docker/compose/releases/download/1.22.0/docker-compose-$(uname -s)-$(uname -m)" 
+  chmod +x /usr/local/bin/docker-compose
+
+  log3 "installing - jq"
+  curl -o /usr/bin/jq -L'#' "https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64"
+  chmod +x /usr/bin/jq
 
   log3 "installing ${brprpl}root${reset}"
   cp -a "${src}/root/." "${rt}/"

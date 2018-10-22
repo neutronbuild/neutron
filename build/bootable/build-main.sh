@@ -53,25 +53,25 @@ function build_app {
     log3 "copying provisioners"
     mkdir -p "${ROOT}/build/script-provisioners"
 
-    LINE_NUM=0
-    SCRIPT_NUM=0
-    (
-        cd build
-        jq '.[] | .type' "${MANIFEST}" | while read -r LINE; do
-            LINE=$(echo "$LINE" | tr -d '"')
-            if [ "$LINE" == "shell" ]; then
-                SCRIPT=$(jq '.['$LINE_NUM'] | .script' "${MANIFEST}" | tr -d '"')
-                cp $SCRIPT "${ROOT}/build/script-provisioners/$SCRIPT_NUM-$(basename "$SCRIPT")"
-                chmod +x "${ROOT}/build/script-provisioners/$SCRIPT_NUM-$(basename "$SCRIPT")"
-            SCRIPT_NUM=$((SCRIPT_NUM+1))
-            elif [[ $LINE == "file" ]]; then
-                SOURCE=$(jq '.['$LINE_NUM'] | .source' "${MANIFEST}" | tr -d '"')
-                DESTINATION=$(echo "${ROOT}/$(cat "${MANIFEST}" | jq '.['$LINE_NUM'] | .destination')" | tr -d '"' )
-                mkdir -p "$(dirname "$DESTINATION")" && cp -a $SOURCE "$DESTINATION"
-            fi
-                LINE_NUM=$((LINE_NUM+1))
-        done
-    )
+    # LINE_NUM=0
+    # SCRIPT_NUM=0
+    # (
+    #     cd build
+    #     jq '.[] | .type' "${MANIFEST}" | while read -r LINE; do
+    #         LINE=$(echo "$LINE" | tr -d '"')
+    #         if [ "$LINE" == "shell" ]; then
+    #             SCRIPT=$(jq '.['$LINE_NUM'] | .script' "${MANIFEST}" | tr -d '"')
+    #             cp $SCRIPT "${ROOT}/build/script-provisioners/$SCRIPT_NUM-$(basename "$SCRIPT")"
+    #             chmod +x "${ROOT}/build/script-provisioners/$SCRIPT_NUM-$(basename "$SCRIPT")"
+    #         SCRIPT_NUM=$((SCRIPT_NUM+1))
+    #         elif [[ $LINE == "file" ]]; then
+    #             SOURCE=$(jq '.['$LINE_NUM'] | .source' "${MANIFEST}" | tr -d '"')
+    #             DESTINATION=$(echo "${ROOT}/$(cat "${MANIFEST}" | jq '.['$LINE_NUM'] | .destination')" | tr -d '"' )
+    #             mkdir -p "$(dirname "$DESTINATION")" && cp -a $SOURCE "$DESTINATION"
+    #         fi
+    #             LINE_NUM=$((LINE_NUM+1))
+    #     done
+    # )
 
     chroot "$ROOT" \
     /usr/bin/env -i \
@@ -132,9 +132,7 @@ function main {
 
     # install app dependencies and setup rootfs
     log1 "Installing application layer"
-    log2 "building app"
-    # TODO: ENABLE CHROOT INSTALL
-    # build_app "${PACKAGE}/mnt/root" "${PACKAGE}/mnt/data"
+    build_app "${PACKAGE}/mnt/root" "${PACKAGE}/mnt/data"
 
     # package
     "${DIR}"/build-disks.sh -a "export" -p "${PACKAGE}" "${IMAGEARGS[@]}"

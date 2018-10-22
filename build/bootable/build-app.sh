@@ -1,4 +1,5 @@
 #!/bin/bash
+#TODO COPYRIGHT
 # Copyright 2017 VMware, Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,6 +35,7 @@ chage -I -1 -m 0 -M 99999 -E -1 root
 
 log3 "configuring ${brprpl}UTC${reset} timezone"
 ln --force --symbolic /usr/share/zoneinfo/UTC /etc/localtime
+
 log3 "configuring ${brprpl}en_US.UTF-8${reset} locale"
 /usr/bin/touch /etc/locale.conf
 /bin/echo "LANG=en_US.UTF-8" > /etc/locale.conf
@@ -52,8 +54,66 @@ find script-provisioners -type f | sort -n | while read -r SCRIPT; do
   ./"$SCRIPT"
 done;
 
+log2 "setting up systemd"
+# Enable systemd services
+systemctl enable appliance-mounts.target repartition.service resizefs.service
+systemctl enable appliance-environment.service
+systemctl enable appliance-ready.target
+systemctl enable appliance-load-docker-images.service
+systemctl enable appliance-tls.service
+systemctl enable sshd_permitrootlogin.service
+systemctl enable getty@tty2.service
+systemctl enable appliance-network.service appliance-firewall.service
+
+# Set our appliance target as the default boot target
+systemctl set-default appliance.target
+
+log3 "hardening ssh"
+# Warning message for client ssh
+message="##########################################################################
+Authorized personnel only.
+##########################################################################"
+
+# Modify ssh config to display warning message before log on
+echo "$message" > "/etc/issue.net"
+banner=$(grep "Banner" /etc/ssh/sshd_config)
+if [ -z "$banner" ]; then
+    echo "Banner /etc/issue.net" >> "/etc/ssh/sshd_config"
+else
+    sed -i "s/.*Banner.*/Banner\ \/etc\/issue\.net/g" /etc/ssh/sshd_config
+fi
+
+# Overwirte /etc/motd to display warning message after log on
+echo "$message" > "/etc/motd"
+
+# Disable IPv6 redirection and router advertisements in kernel settings
+settings="net.ipv6.conf.all.accept_redirects = 0
+net.ipv6.conf.default.accept_redirects = 0
+net.ipv6.conf.all.accept_ra = 0
+net.ipv6.conf.default.accept_ra = 0"
+echo "$settings" > "/etc/sysctl.d/40-ipv6.conf"
+
+# Clear SSH host keys
+rm -f /etc/ssh/{ssh_host_dsa_key,ssh_host_dsa_key.pub,ssh_host_ecdsa_key,ssh_host_ecdsa_key.pub,ssh_host_ed25519_key,ssh_host_ed25519_key.pub,ssh_host_rsa_key,ssh_host_rsa_key.pub}
+
+# Hardening SSH configuration
+afsetting=$(grep "AllowAgentForwarding" /etc/ssh/sshd_config)
+if [ -z "$afsetting" ]; then
+    echo "AllowAgentForwarding no" >> "/etc/ssh/sshd_config"
+else
+    sed -i "s/.*AllowAgentForwarding.*/AllowAgentForwarding\ no/g" /etc/ssh/sshd_config
+fi
+
+tcpfsetting=$(grep "AllowTcpForwarding" /etc/ssh/sshd_config)
+if [ -z "$tcpfsetting" ]; then
+    echo "AllowTcpForwarding no" >> "/etc/ssh/sshd_config"
+else
+    sed -i "s/.*AllowTcpForwarding.*/AllowTcpForwarding\ no/g" /etc/ssh/sshd_config
+fi
+
 log2 "cleaning up base os disk"
 tdnf clean all
+rm -rf /tmp/* /var/tmp/*
 
 /sbin/ldconfig
 /usr/sbin/pwconv
@@ -63,13 +123,6 @@ tdnf clean all
 rm /etc/resolv.conf
 ln -sf ../run/systemd/resolve/resolv.conf /etc/resolv.conf
 
-log3 "cleaning up tmp"
-rm -rf /tmp/*
-
-log3 "removing man pages"
-rm -rf /usr/share/man/*
-log3 "removing any docs"
-rm -rf /usr/share/doc/*
 log3 "removing caches"
 find /var/cache -type f -exec rm -rf {} \;
 
@@ -92,10 +145,6 @@ echo -ne '' > /root/.bashrc
 echo -ne '' > /root/.bash_profile
 echo 'shopt -s histappend' >> /root/.bash_profile
 echo 'export PROMPT_COMMAND="history -a; history -c; history -r; $PROMPT_COMMAND"' >> /root/.bash_profile
-
-# Clear SSH host keys
-log3 "resetting ssh host keys"
-rm -f /etc/ssh/{ssh_host_dsa_key,ssh_host_dsa_key.pub,ssh_host_ecdsa_key,ssh_host_ecdsa_key.pub,ssh_host_ed25519_key,ssh_host_ed25519_key.pub,ssh_host_rsa_key,ssh_host_rsa_key.pub}
 
 # Zero out the free space to save space in the final image
 log3 "zero out free space"
