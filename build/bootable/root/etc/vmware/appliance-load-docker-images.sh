@@ -1,4 +1,5 @@
 #!/usr/bin/bash
+# TODO: COPYRIGHT
 # Copyright 2017 VMware, Inc. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,14 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 set -euf -o pipefail
-source /installer.env
 
-if [[ ! -f /etc/vmware/firstboot ]]; then
-  # Only load the docker images if it's the first time booting
-  ls "/etc/cache/docker/" | while read line; do
-    docker load -i "/etc/cache/docker/$line"
-  done;
-  date -u +"%Y-%m-%dT%H:%M:%SZ" > /etc/vmware/firstboot
-else
-  echo "No images to load...."
-fi
+[ -d "/etc/cache/docker/" ] && ls "/etc/cache/docker/" | while read tar; do
+  docker load -i "/etc/cache/docker/$tar";
+  rm "/etc/cache/docker/$tar";
+done;
