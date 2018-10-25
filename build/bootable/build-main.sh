@@ -111,23 +111,25 @@ function main {
     # create disks
     "${DIR}"/build-disks.sh -a "create" -p "${PACKAGE}" "${IMAGEARGS[@]}"
 
+    log1 "Installing base os"
+    
     # build cache dependencies
     CACHEDIR="${RESOURCE}/.cache"
+    TDNFCACHE="${CACHEDIR}/.tdnf-cache.tar.gz"
     [ -n "${CACHE}" ] && mkdir -p "${CACHEDIR}"
-    [ -n "${CACHE}" ] && "${DIR}"/build-cache.sh -c "${CACHEDIR}"
 
-    # extract or build base install
-    log1 "Installing base os"
-    BASE="${CACHEDIR}/.ova-base.tar.gz"
+    if [[ -n "$CACHE" && -f "${TDNFCACHE}" ]]; then
+        log2 "extracting tdnf cache"
+        mkdir -p "${PACKAGE}/mnt/root/var/cache/tdnf"
+        tar -xzf "${TDNFCACHE}" --skip-old-files -C "${PACKAGE}/mnt/root/var/cache/tdnf"
+    fi
 
-    if [ -f "${BASE}" ]; then
-        log2 "extracting base"
-        tar -xzf "${BASE}" --skip-old-files -C "${PACKAGE}/mnt/root"
-    else
-        log2 "building base"
-        "${DIR}"/build-base.sh -r "${PACKAGE}/mnt/root"
-        [ -n "$CACHE" ] && log2 "exporting base"
-        [ -n "$CACHE" ] && tar -czf "${BASE}" -C "${PACKAGE}/mnt/root" .
+    log2 "building base"
+    "${DIR}"/build-base.sh -r "${PACKAGE}/mnt/root"
+
+    if [ -n "$CACHE" ]; then
+        log2 "exporting tdnf cache"
+        tar -czf "${TDNFCACHE}" -C "${PACKAGE}/mnt/root/var/cache/tdnf" .
     fi
 
     # install app dependencies and setup rootfs
@@ -165,7 +167,7 @@ function usage() {
     echo "Usage: $0 
         -r resource-location    : required, directory for resulting ova.
         -m manifest-location    : required, path to ova manifest.
-        -c                      : optional, enable dependency caching.
+        -c                      : optional, enable tdnf dependency caching.
     " 1>&2
     exit 1
 }

@@ -89,10 +89,14 @@ function set_base() {
   rt="${2}"
 
   log2 "preparing install stage"
+
+  log3 "installing ${brprpl}root${reset}"
+  cp -a "${src}/root/." "${rt}/"
+
   log3 "configuring ${brprpl}tdnf${reset}"
   install -D --mode=0644 --owner=root --group=root /etc/pki/rpm-gpg/VMWARE-RPM-GPG-KEY "${rt}/etc/pki/rpm-gpg/VMWARE-RPM-GPG-KEY"
   mkdir -p "${rt}/var/lib/rpm"
-  mkdir -p "${rt}/cache/tdnf"
+  mkdir -p "${rt}/var/cache/tdnf"
   log3 "initializing ${brprpl}rpm db${reset}"
   rpm --root "${rt}/" --initdb
   rpm --root "${rt}/" --import "${rt}/etc/pki/rpm-gpg/VMWARE-RPM-GPG-KEY"
@@ -113,7 +117,6 @@ function set_base() {
   tdnf install --installroot "${rt}/" --refresh -y \
     $(printf " %s" "${packages[@]}")
 
-
   log3 "installing pyyaml"
   pip install pyyaml
 
@@ -128,6 +131,7 @@ function set_base() {
 
   log3 "installing ${brprpl}root${reset}"
   cp -a "${src}/root/." "${rt}/"
+  cp -a /var/cache/tdnf/. "${rt}/var/cache/tdnf/"
 }
 
 function usage() {
