@@ -12,7 +12,7 @@ RUN set -eux; \
 
 COPY ./build/ /build/
 COPY ./bin/ovfenv ./bin/dcui ./bin/rpctool /build/bin/
-    
+
 WORKDIR /build/
 
 RUN set -eux; \

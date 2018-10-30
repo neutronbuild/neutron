@@ -95,6 +95,7 @@ ova-builder: $(ovfenv) $(dcui) $(rpctool)
 clean:
 	@echo removing binaries
 	rm -rf $(BIN)
+	@docker rmi -f "neutronbuild/neutron"
 
 # exit 1 if golint complains about anything other than comments
 golintf = $(GOLINT) $(1) | sh -c "! grep -v 'should have comment'" | sh -c "! grep -v 'comment on exported'" | sh -c "! grep -v 'by other packages, and that stutters'" | sh -c "! grep -v 'error strings should not be capitalized'"

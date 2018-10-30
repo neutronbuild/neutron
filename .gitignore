@@ -1,3 +1,5 @@
 *.ova
 *.gas
 bin/
+*.cache
+*.log
