@@ -78,14 +78,13 @@ make ova-builder
 # run the minimal ova build script with caching enabled.
 cd contrib/minimal
 ./build.sh
-# completed appliance is in `bin` directory
 ```
 
 ### Deploy the Appliance
 
 ```
 ovftool --datastore=datastore1 --noSSLVerify --acceptAllEulas --name=neutron --diskMode=thin \
-  --powerOn --X:waitForIp --X:injectOvfEnv --X:enableHiddenProperties
-  --prop:appliance.root_pwd='changeme' --prop:appliance.permit_root_login=True
+  --powerOn --X:waitForIp --X:injectOvfEnv --X:enableHiddenProperties \
+  --prop:appliance.root_pwd='changeme' --prop:appliance.permit_root_login=True \
   --net:"Network"="VM Network" bin/appliance-aaaaaaaa.ova 'vi://root:password@10.0.0.1'
 ```
