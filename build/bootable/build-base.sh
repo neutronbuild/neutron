@@ -122,12 +122,15 @@ function set_base() {
 
   log3 "installing - docker compose"
   # TODO(morris-jason) find some way to configure these versions
-  curl -o /usr/local/bin/docker-compose -L'#' "https://github.com/docker/compose/releases/download/1.22.0/docker-compose-$(uname -s)-$(uname -m)" 
+  curl -o /usr/local/bin/docker-compose -L'#' "https://github.com/docker/compose/releases/download/1.22.0/docker-compose-$(uname -s)-$(uname -m)"
   chmod +x /usr/local/bin/docker-compose
 
   log3 "installing - jq"
   curl -o /usr/bin/jq -L'#' "https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64"
   chmod +x /usr/bin/jq
+
+  log3 "installing binaries"
+  cp /build/bin/* ${rt}/usr/local/bin
 
   log3 "installing ${brprpl}root${reset}"
   cp -a "${src}/root/." "${rt}/"

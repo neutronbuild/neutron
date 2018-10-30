@@ -111,7 +111,7 @@ function main {
     "${DIR}"/build-disks.sh -a "create" -p "${PACKAGE}" "${IMAGEARGS[@]}"
 
     log1 "Installing base os"
-    
+
     # build cache dependencies
     CACHEDIR="${RESOURCE}/.cache"
     TDNFCACHE="${CACHEDIR}/.tdnf-cache.tar.gz"
@@ -151,7 +151,7 @@ function main {
     done
     log2 "rebuilding OVF manifest"
     sha256sum --tag "appliance-${BUILD_OVA_REVISION}.ovf" "${IMAGEFILES[@]}" | sed s/SHA256\ \(/SHA256\(/ > "appliance-${BUILD_OVA_REVISION}.mf"
-    
+
     OVA_FILE="${RESOURCE}/appliance-${BUILD_OVA_REVISION}.ova"
     tar -cvf "$OVA_FILE" "appliance-${BUILD_OVA_REVISION}.ovf" "appliance-${BUILD_OVA_REVISION}.mf" "${IMAGEFILES[@]}"
 
@@ -163,7 +163,7 @@ function main {
 }
 
 function usage() {
-    echo "Usage: $0 
+    echo "Usage: $0
         -r resource-location    : required, directory for resulting ova.
         -m manifest-location    : required, path to ova manifest.
         -c                      : optional, enable tdnf dependency caching.
@@ -200,12 +200,12 @@ echo "${MANIFEST} -- ${RESOURCE}"
 if [ ! -e "${MANIFEST}" ]; then
     log1 "manifest [$(basename ${MANIFEST})] not found" 1>&2
     usage
-fi 
+fi
 
 if [ ! -e "${RESOURCE}" ]; then
     log1 "resource dir [$(basename ${RESOURCE})] not found" 1>&2
     usage
-fi 
+fi
 
 exec 3>&1 1>"${RESOURCE}/installer-build.log" 2>&1
 log1 "Starting appliance build in ${RESOURCE}."
