@@ -18,6 +18,7 @@ GO ?= go
 SED ?= sed
 RM ?= rm
 OS := $(shell uname | tr '[:upper:]' '[:lower:]')
+BUILD_NUMBER := $(shell git rev-parse --verify --short=8 HEAD)
 
 BASE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
@@ -28,7 +29,7 @@ DEP ?= $(GOPATH)/bin/dep$(BIN_ARCH)
 GAS ?= $(GOPATH)/bin/gas$(BIN_ARCH)
 GOLINT ?= $(GOPATH)/bin/golint$(BIN_ARCH)
 
-.PHONY: gas ova ova-builder all
+.PHONY: gas all ova-builder
 
 LDFLAGS := $(shell BUILD_NUMBER=${BUILD_NUMBER} TAG=${TAG} $(BASE_DIR)/scripts/version-linker-flags.sh)
 
@@ -40,7 +41,7 @@ ovfenv: $(ovfenv)
 dcui: $(dcui)
 rpctool: $(rpctool)
 tools: $(DEP) $(GOLINT) $(GAS)
-all: golint gofmt govet gas $(ovfenv) $(dcui) $(rpctool) ova
+all: golint gofmt govet gas $(ovfenv) $(dcui) $(rpctool)
 
 vendor: $(DEP)
 	@echo restoring vendor
@@ -79,11 +80,17 @@ define godeps
 	)
 endef
 
-ova-builder:
-	@./build/container/push.sh
+IMAGE := neutron
+REPO := docker.io/neutronbuild
+NAME := neutron
 
-ova:
-	@./build/build.sh -c
+ova-builder: $(ovfenv) $(dcui) $(rpctool)
+	# @[ -n "${BUILD_CI:-}" ] && ARGS="--pull --force-rm --no-cache", ${ARGS:-}
+	@docker build -t "$(IMAGE):$(BUILD_NUMBER)" -f Dockerfile .
+	@docker tag "$(IMAGE):$(BUILD_NUMBER)" "$(REPO)/$(IMAGE):latest"
+	@docker tag "$(IMAGE):$(BUILD_NUMBER)" "$(REPO)/$(IMAGE):$(BUILD_NUMBER)"
+	# @docker push "$(REPO)/$(IMAGE):latest"
+	# @docker push "$(REPO)/$(IMAGE):$(BUILD_NUMBER)"
 
 clean:
 	@echo removing binaries

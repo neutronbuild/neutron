@@ -1,0 +1,12 @@
+# this is not the manifest you are looking for.
+# you can go about your business.
+ova:
+  name: neutron-ova
+kernel: linux-esx
+disks:
+  - name: root
+    size: 20
+    mountpoint: /
+  - name: data
+    size: 50
+    mountpoint: /data

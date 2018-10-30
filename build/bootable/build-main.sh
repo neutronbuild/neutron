@@ -73,11 +73,10 @@ function build_app {
     #     done
     # )
 
-    chroot "$ROOT" \
+    chroot "${ROOT}" \
     /usr/bin/env -i \
     HOME=/root \
-    TERM="$TERM" \
-    DEBUG="$DEBUG" \
+    TERM="${TERM}" \
     BUILD_OVA_REVISION="${BUILD_OVA_REVISION}" \
     PS1='\u:\w\$ ' \
     PATH=/bin:/usr/bin:/sbin:/usr/sbin \
@@ -196,6 +195,17 @@ shift $((OPTIND-1))
 if [[ -n "$*" || -z "${RESOURCE}" || -z "${MANIFEST}" ]]; then
     usage
 fi
+ls -l out
+echo "${MANIFEST} -- ${RESOURCE}"
+if [ ! -e "${MANIFEST}" ]; then
+    log1 "manifest [$(basename ${MANIFEST})] not found" 1>&2
+    usage
+fi 
+
+if [ ! -e "${RESOURCE}" ]; then
+    log1 "resource dir [$(basename ${RESOURCE})] not found" 1>&2
+    usage
+fi 
 
 exec 3>&1 1>"${RESOURCE}/installer-build.log" 2>&1
 log1 "Starting appliance build in ${RESOURCE}."

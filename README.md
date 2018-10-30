@@ -68,6 +68,7 @@ This project was originally forked from [VMware vSphere Integrated Containers (V
 ```bash
 # create the build container. temporary step.
 make ova-builder
-# run the build script with caching enabled
-make ova
+# run the minimal ova build script with caching enabled.
+cd contrib/minimal
+./build.sh
 ```
