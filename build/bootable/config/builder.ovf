@@ -16,7 +16,7 @@
   <DiskSection>
     <Info>List of the virtual disks and partitions needed</Info>
     <Disk ovf:capacity="20" ovf:capacityAllocationUnits="byte * 2^30" ovf:diskId="system" ovf:fileRef="system.vmdk_id" ovf:format="http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized" ovf:populatedSize="0" />
-    <Disk ovf:capacity="50" ovf:capacityAllocationUnits="byte * 2^30" ovf:diskId="data" ovf:fileRef="data.vmdk_id" ovf:format="http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized" ovf:populatedSize="9" />
+    <Disk ovf:capacity="50" ovf:capacityAllocationUnits="byte * 2^30" ovf:diskId="data" ovf:fileRef="data.vmdk_id" ovf:format="http://www.vmware.com/interfaces/specifications/vmdk.html#streamOptimized" ovf:populatedSize="0" />
   </DiskSection>
   <VirtualSystem ovf:id="neutron">
     <Info>A virtual machine</Info>
