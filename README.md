@@ -37,10 +37,10 @@ This project was originally forked from [VMware vSphere Integrated Containers (V
 
 ## To Do
 
-- [*] Remove dependencies on hosted files
-- [*] Remove dependencies on hosted containers
-- [*] Remove Harbor, Admiral, UI
-- [*] Remove other appliance services
+- [x] Remove dependencies on hosted files
+- [x] Remove dependencies on hosted containers
+- [x] Remove Harbor, Admiral, UI
+- [x] Remove other appliance services
 - [ ] Add reference service and documentation
 - [ ] Clean up READMEs for build
 - [ ] Fix copyright headers
@@ -57,13 +57,20 @@ This project was originally forked from [VMware vSphere Integrated Containers (V
 - [ ] photon2
 - [ ] Pull containers for docker-image-load with login credentials
 - [ ] Build go tools (ovfenv, etc) in the build container
-
-- [*] Unforked repo.
+- [ ] A way to pass appliance versions into the OVA
+- [x] Unforked repo.
 - [ ] ~Remove dependency on OVF keys. Perhaps package a config webapp in initrd.~
 - [ ] Develop a versioning and deliverable strategy. This is now a tool to build OVAs, not an OVA itself.
 - [ ] Move away from privileged loopback devices in the builder.
 
 ## How to run the builder
+
+### Requirements
+
+- The `neutron` project must be cloned into `$GOPATH/src/github.com/neutronbuild`
+- Must have `go` in path
+
+### Running
 
 ```bash
 # create the build container. temporary step.
@@ -71,4 +78,14 @@ make ova-builder
 # run the minimal ova build script with caching enabled.
 cd contrib/minimal
 ./build.sh
+# completed appliance is in `bin` directory
+```
+
+### Deploy the Appliance
+
+```
+ovftool --datastore=datastore1 --noSSLVerify --acceptAllEulas --name=neutron --diskMode=thin \
+  --powerOn --X:waitForIp --X:injectOvfEnv --X:enableHiddenProperties
+  --prop:appliance.root_pwd='changeme' --prop:appliance.permit_root_login=True
+  --net:"Network"="VM Network" bin/appliance-aaaaaaaa.ova 'vi://root:password@10.0.0.1'
 ```
