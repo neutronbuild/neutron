@@ -1,7 +1,7 @@
 FROM vmware/photon
 
 ENV GOVERSION=1.9.2
-ENV PATH=$PATH:/root/gsutil:/usr/local/go/bin:/usr/local/google-cloud-sdk/bin/
+ENV PATH=$PATH:/usr/local/go/bin
 
 RUN set -eux; \
     tdnf install -y make tar gzip python2 python-pip sed git diff \
