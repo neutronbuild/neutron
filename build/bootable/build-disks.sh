@@ -85,14 +85,11 @@ menuentry "Photon" {
 EOF
 }
 
-function create_disk() {
-  local img="$1"
-  local disk_size="$2"
-  local mp="$3"
-  local boot="${4:-}"
+function convert() {
+  local mount=$1
+  local vmdk=$2
+  local boot="${3:-}"
   cd "${PACKAGE}"
-
-  losetup -f || ( echo "Cannot setup loop devices" && exit 1 )
 
   log3 "allocating raw image of ${brprpl}${disk_size}${reset}"
   fallocate -l "$disk_size" -o 1024 "$img"
@@ -101,14 +98,17 @@ function create_disk() {
   sgdisk -Z -og "$img"
 
   part_num=1
+  UUID=$(cat /proc/sys/kernel/random/uuid)
   if [[ -n $boot ]]; then
     log3 "creating bios boot partition"
-    sgdisk -n $part_num:2048:+2M -c $part_num:"BIOS Boot" -t $part_num:ef02 "$img"
+    sgdisk -n $part_num:2048:+2M -c $part_num:"BIOS Boot" -t $part_num:ef02 -u $part_num:$UUID "$img"
+
     part_num=$((part_num+1))
+    UUID=$(cat /proc/sys/kernel/random/uuid)
   fi
 
   log3 "creating linux partition"
-  sgdisk -N $part_num -c $part_num:"Linux system" -t $part_num:8300 "$img"
+  sgdisk -N $part_num -c $part_num:"Linux system" -t $part_num:8300 -u $part_num:$UUID "$img"
 
   log3 "reloading loop devices"
   disk=$(losetup --show -f -P "$img")
@@ -124,22 +124,6 @@ function create_disk() {
     log3 "setup grup on boot disk"
     setup_grub "$disk" "$mp"
   fi
-  
-}
-
-function convert() {
-  local dev=$1
-  local mount=$2
-  local raw=$3
-  local vmdk=$4
-  cd "${PACKAGE}"
-  log3 "unmount ${brprpl}${mount}${reset}"
-  if mountpoint "${mount}" >/dev/null 2>&1; then
-    umount -R "${mount}/" >/dev/null 2>&1
-  fi
-
-  log3 "release loopback device ${brprpl}${dev}${reset}"
-  losetup -d "$dev"
 
   log3 "converting raw image ${brprpl}${raw}${reset} into ${brprpl}${vmdk}${reset}"
   qemu-img convert -f raw -O vmdk -o 'compat6,adapter_type=lsilogic,subformat=streamOptimized' "$raw" "$vmdk"
@@ -197,20 +181,17 @@ fi
 if [ "${ACTION}" == "create" ]; then
   log1 "create disk images"
   for i in "${!IMAGES[@]}"; do
-    BOOT=""
-    [ "$i" == "0" ] && BOOT="1"
-    log2 "creating ${IMAGES[$i]}.img"
-    # TODO: ALLOCATE SIZE DYNAMICALLY
-    create_disk "${IMAGES[$i]}.img" 4gb "${PACKAGE}/${IMAGEROOTS[$i]}" $BOOT
+    log2 "creating ${IMAGES[$i]}"
+    mkdir -p "${PACKAGE}/${IMAGEROOTS[$i]}"
   done
 
 elif [ "${ACTION}" == "export" ]; then
   log1 "export images to VMDKs"
   for i in "${!IMAGES[@]}"; do
-    log2 "exporting ${IMAGES[$i]}.img to ${IMAGES[$i]}.vmdk"
-    echo "export ${PACKAGE}/${IMAGES[$i]}"
-    DEV=$(losetup -l -O NAME,BACK-FILE -a | tail -n +2 | grep "${PACKAGE}/${IMAGES[$i]}" | awk '{print $1}')
-    convert "${DEV}" "${PACKAGE}/${IMAGEROOTS[$i]}" "${IMAGES[$i]}.img" "${IMAGES[$i]}.vmdk"
+    log2 "exporting ${IMAGES[$i]} to ${IMAGES[$i]}.vmdk"
+    BOOT=""
+    [ "$i" == "0" ] && BOOT="1"
+    convert "${PACKAGE}/${IMAGEROOTS[$i]}" "${IMAGES[$i]}.vmdk" $BOOT
   done
 
   log2 "VMDK Sizes"
@@ -218,5 +199,4 @@ elif [ "${ACTION}" == "export" ]; then
 
 else
   usage
-
 fi
