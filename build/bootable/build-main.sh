@@ -153,8 +153,9 @@ function main {
     sha256sum --tag "appliance-${BUILD_OVA_REVISION}.ovf" "${IMAGEFILES[@]}" | sed s/SHA256\ \(/SHA256\(/ > "appliance-${BUILD_OVA_REVISION}.mf"
 
     OVA_FILE="${RESOURCE}/appliance-${BUILD_OVA_REVISION}.ova"
-    tar -cvf "$OVA_FILE" "appliance-${BUILD_OVA_REVISION}.ovf" "appliance-${BUILD_OVA_REVISION}.mf" "${IMAGEFILES[@]}"
+    tar -cvf "$OVA_FILE" "appliance-${BUILD_OVA_REVISION}.ovf"  "${IMAGEFILES[@]}"
 
+    # "appliance-${BUILD_OVA_REVISION}.mf"
     log1 "build complete for $(basename $OVA_FILE)"
     log2 "SHA256: $(shasum -a 256 "$OVA_FILE"| awk '{ print $1 }')"
     log2 "SHA1: $(shasum -a 1 "$OVA_FILE" | awk '{ print $1 }')"

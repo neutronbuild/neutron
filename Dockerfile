@@ -5,7 +5,7 @@ ENV PATH=$PATH:/usr/local/go/bin
 
 RUN set -eux; \
     tdnf install -y make tar gzip python2 python-pip sed git diff \
-    gawk docker gptfdisk e2fsprogs grub2 parted xz docker jq libvirt;
+    gawk docker gptfdisk e2fsprogs grub2 parted xz docker jq cpio;
 
 RUN set -eux; \
     curl -L'#' -k https://storage.googleapis.com/golang/go$GOVERSION.linux-amd64.tar.gz | tar xzf - -C /usr/local;

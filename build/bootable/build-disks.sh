@@ -19,17 +19,14 @@ DIR=$(dirname "$(readlink -f "$0")")
 . "${DIR}/log.sh"
 
 function setup_grub() {
-  disk=$1
-  device="${1}p2"
-  root=$2
+  local root=$1
+  local BOOT_UUID=$2
+  local PART_UUID=$3
 
-  log3 "install grub to ${brprpl}${root}/boot${reset} on ${brprpl}${disk}${reset}" 
+  log3 "install grub to ${brprpl}${root}/boot${reset}" 
   mkdir -p "${root}/boot/grub2"
   ln -sfv grub2 "${root}/boot/grub"
-  grub2-install --target=i386-pc --modules "part_gpt gfxterm vbe tga png ext2" --no-floppy --force --boot-directory="${root}/boot" "$disk"
 
-  PARTUUID=$(blkid -s PARTUUID -o value "${device}")
-  BOOT_UUID=$(blkid -s UUID -o value "${device}")
   BOOT_DIRECTORY=/boot/
 
   log3 "configure grub"
@@ -73,7 +70,7 @@ if [ -f  ${BOOT_DIRECTORY}systemd.cfg ]; then
 else
     set systemd_cmdline=net.ifnames=0
 fi
-set rootpartition=PARTUUID=$PARTUUID
+set rootpartition=PARTUUID=$PART_UUID
 
 menuentry "Photon" {
     linux ${BOOT_DIRECTORY}\$photon_linux root=\$rootpartition \$photon_cmdline \$systemd_cmdline $EXTRA_PARAMS
@@ -89,45 +86,77 @@ function convert() {
   local mount=$1
   local vmdk=$2
   local boot="${3:-}"
+  local mp=$(mktemp -d)
   cd "${PACKAGE}"
+  
+  # get size using a cpio archive
+  (
+      cd "$mount"
+      find . | cpio -o >"${PACKAGE}/$vmdk.img.cpio"
+  )
+  root_disk_size=$(stat -c %s "${PACKAGE}/$vmdk.img.cpio")
+  root_disk_size=$(((root_disk_size+1024)/1024*1024))
+  four_kilo=$((4*1024*1024))
+  if [ $((root_disk_size)) -lt $((four_kilo)) ];  then
+    root_disk_size=$four_kilo
+  fi
+  log3 "root size on disk is $root_disk_size"
+  disk_size=$(((root_disk_size+(1*1024*1024*1024))/1024*1024)) # add 1GB buffer and round for boot
 
   log3 "allocating raw image of ${brprpl}${disk_size}${reset}"
-  fallocate -l "$disk_size" -o 1024 "$img"
-
+  fallocate -l "$disk_size" -o 1024 "$vmdk.img"
+  
+  # partition disk
   log3 "wiping existing filesystems"
-  sgdisk -Z -og "$img"
+  sgdisk -Z -og "$vmdk.img"
 
+  #################################### partition setup
   part_num=1
   UUID=$(cat /proc/sys/kernel/random/uuid)
   if [[ -n $boot ]]; then
+    export BOOT_UUID=UUID
+    
     log3 "creating bios boot partition"
-    sgdisk -n $part_num:2048:+2M -c $part_num:"BIOS Boot" -t $part_num:ef02 -u $part_num:$UUID "$img"
+    sgdisk -n $part_num:2048:+2M -c $part_num:"BIOS Boot" -t $part_num:ef02 -u $part_num:$UUID "$vmdk.img"
 
     part_num=$((part_num+1))
     UUID=$(cat /proc/sys/kernel/random/uuid)
   fi
 
   log3 "creating linux partition"
-  sgdisk -N $part_num -c $part_num:"Linux system" -t $part_num:8300 -u $part_num:$UUID "$img"
+  sgdisk -N $part_num -c $part_num:"Linux system" -t $part_num:8300 -u $part_num:$UUID "$vmdk.img"
 
-  log3 "reloading loop devices"
-  disk=$(losetup --show -f -P "$img")
-
+  #################################### extract root fs
+  fallocate -l "$root_disk_size" -o 1024 "$vmdk.img.root"
   log3 "formatting linux partition"
-  mkfs.ext4 -F "${disk}p$part_num" 
+  mkfs.ext4 -F "$vmdk.img.root"
 
-  log3 "mounting partition ${brprpl}${disk}p$part_num${reset} at ${brprpl}${mp}${reset}"
-  mkdir -p "$mp"
-  mount "${disk}p$part_num" "$mp"
+  log3 "copying root fs"
+  mount -o loop "$vmdk.img.root" "$mp"
+  (
+      cd "$mp"
+      cpio -id < "${PACKAGE}/$vmdk.img.cpio"
+  )
 
-    if [[ -n $boot ]]; then
+  ################################### extract boot efi
+  if [[ -n $boot ]]; then
     log3 "setup grup on boot disk"
-    setup_grub "$disk" "$mp"
+    setup_grub "$mp" "$BOOT_UUID" "$UUID"
+    grub2-mkimage -O i386-pc -o "$vmdk.img.boot" -p "${mp}/boot" -c ${mp}/boot/grub2/grub.cfg part_gpt gfxterm vbe tga png ext2
+  fi
+  umount "$mp"
+
+  ################################# burn raw image
+  if [[ -n "$boot" ]]; then
+    dd if="$vmdk.img.boot" of="$vmdk.img" bs=512 count=2M conv=notrunc seek=2048
+    dd if="$vmdk.img.root" of="$vmdk.img" bs=512 conv=notrunc seek=6144 #2048+2M=6144
+  else
+    dd if="$vmdk.img.root" of="$vmdk.img" bs=512 conv=notrunc
   fi
 
-  log3 "converting raw image ${brprpl}${raw}${reset} into ${brprpl}${vmdk}${reset}"
-  qemu-img convert -f raw -O vmdk -o 'compat6,adapter_type=lsilogic,subformat=streamOptimized' "$raw" "$vmdk"
-  rm "$raw"
+  log3 "converting raw image ${brprpl}${vmdk}.img${reset} into ${brprpl}${vmdk}${reset}"
+  qemu-img convert -f raw -O vmdk -o 'compat6,adapter_type=lsilogic,subformat=streamOptimized' "$vmdk.img" "$vmdk"
+  rm "$vmdk".img*
 }
 
 function usage() {
