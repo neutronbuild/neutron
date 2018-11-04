@@ -1,16 +1,34 @@
-mkdir -p /build/out
-touch /build/out/ova-manifest.yml
-/build/bootable/build-main.sh -m /build/out/ova-manifest.yml -r /build/out/
+#!/usr/bin/env bash
+set -eux -o pipefail +h
+
+# mkdir -p /build/out
+# touch /build/out/ova-manifest.yml
+# /build/bootable/build-main.sh -m /build/out/ova-manifest.yml -r /build/out/
+
+
+######################################
+################### INSTALL PACKAGES
+######################################
+
+apt update -y
+apt install -y grub-efi-amd64-bin e2fsprogs gdisk
+
+######################################
+################### PREP FILESYSTEM
+######################################
+
+export PACKAGE=$(mktemp -d)
+mkdir -p "$PACKAGE/root"
+wget https://github.com/vmware/photon-docker-image/blob/2.0-20181017/docker/photon-rootfs-2.0-045c453.tar.bz2?raw=true -O photonfs.tar.bz2
+bazip2 -d photonfs.tar.bz2
+tar -C "$PACKAGE/root" -xf photonfs.tar
+
 
 export disk_size=1gb
 export img=disk.raw
 export part_num=1
 export ROOT_UUID=$(cat /proc/sys/kernel/random/uuid)
 export BOOT_UUID=$(cat /proc/sys/kernel/random/uuid)
-
-######################################
-################### PREP FILESYSTEM
-######################################
 
 BOOT_DIRECTORY=/boot/
 
@@ -82,4 +100,6 @@ dd if=root.iso of=$img bs=1024 conv=notrunc seek=6144
 
 qemu-img convert -f raw -O vmdk -o 'compat6,adapter_type=lsilogic,subformat=streamOptimized' "$img" "$vmdk"
 
-wget https://github.com/vmware/photon-docker-image/blob/2.0-20181017/docker/photon-rootfs-2.0-045c453.tar.bz2?raw=true -O photonfs.tar.bz2
+# brw-rw---- 1 root root   7,   0 Nov  3 03:48 /dev/loop0
+# brw-rw---- 1 root root 259,   0 Nov  3 22:45 /dev/loop0p1
+# brw-rw---- 1 root root 259,   1 Nov  3 22:45 /dev/loop0p2

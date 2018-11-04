@@ -35,7 +35,7 @@ packages=(
   photon-release
   tdnf
   openssh
-  linux-esx
+  linux
   sed
   gzip
   zip

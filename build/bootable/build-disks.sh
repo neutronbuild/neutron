@@ -18,24 +18,68 @@ set -e -o pipefail +h && [ -n "$DEBUG" ] && set -x
 DIR=$(dirname "$(readlink -f "$0")")
 . "${DIR}/log.sh"
 
-function setup_grub() {
-  local root=$1
-  local BOOT_UUID=$2
-  local PART_UUID=$3
 
-  log3 "install grub to ${brprpl}${root}/boot${reset}" 
-  mkdir -p "${root}/boot/grub2"
-  ln -sfv grub2 "${root}/boot/grub"
+function convert_with_efi() {
+  local mount=$1
+  local vmdk=$2
+  cd "${PACKAGE}"
+  
+  # get size using a cpio archive
+  (
+      cd "$mount"
+      find . | cpio -o >"${PACKAGE}/$vmdk.img.cpio"
+  )
+  root_disk_size=$(stat -c %s "${PACKAGE}/$vmdk.img.cpio")
+  root_disk_size=$(((root_disk_size+(1*1024))/1024*1024))
+  four_mb=$((4*1024*1024))
+  if [ $((root_disk_size)) -lt $((four_mb)) ];  then
+    root_disk_size=$four_mb
+  fi
+  log3 "root size on disk is $root_disk_size"
+
+
+  #################################### partition setup
+  BOOT_UUID=$(cat /proc/sys/kernel/random/uuid)
+  ROOT_UUID=$(cat /proc/sys/kernel/random/uuid)
+
+
+  #################################### extract root fs
+  log3 "formatting linux partition"  
+  dd if=/dev/zero of="$vmdk.img.root" bs=1M count=$((root_disk_size/(1024*1024)))
+  mkfs.ext4 -F "$vmdk.img.root"
+
+  log3 "copying root fs"
+  mp=$(mktemp -d)
+
+  mount -o loop "$vmdk.img.root" "$mp"
+  (
+      cd "$mp"
+      cpio -id < "${PACKAGE}/$vmdk.img.cpio"
+  )
+
+
+  ################################### extract boot efi
+  log3 "formatting boot partition"
+  mkfs.vfat -C "$vmdk.img.boot" 10240 #10M
+
+  log3 "setup grup on boot disk"
+  mpboot=$(mktemp -d)
+  mount -o loop "$vmdk.img.boot" "$mpboot"
+  
+  mkdir -p ${mpboot}/EFI/BOOT
+  
+  mkdir -p "${mp}/boot/grub2"
+  ln -sfv grub2 "${mp}/boot/grub"
 
   BOOT_DIRECTORY=/boot/
 
   log3 "configure grub"
-  rm -rf "${root}/boot/grub2/fonts"
-  cp "${DIR}/boot/ascii.pf2" "${root}/boot/grub2/"
-  mkdir -p "${root}/boot/grub2/themes/photon"
-  cp "${DIR}"/boot/splash.png "${root}/boot/grub2/themes/photon/photon.png"
-  cp "${DIR}"/boot/terminal_*.tga "${root}/boot/grub2/themes/photon/"
-  cp "${DIR}"/boot//theme.txt "${root}/boot/grub2/themes/photon/"
+  rm -rf "${mp}/boot/grub2/fonts"
+  cp "${DIR}/boot/ascii.pf2" "${mp}/boot/grub2/"
+  mkdir -p "${mp}/boot/grub2/themes/photon"
+  cp "${DIR}"/boot/splash.png "${mp}/boot/grub2/themes/photon/photon.png"
+  cp "${DIR}"/boot/terminal_*.tga "${mp}/boot/grub2/themes/photon/"
+  cp "${DIR}"/boot/theme.txt "${mp}/boot/grub2/themes/photon/"
   # linux-esx tries to mount rootfs even before nvme got initialized.
   # rootwait fixes this issue
   EXTRA_PARAMS=""
@@ -43,7 +87,7 @@ function setup_grub() {
       EXTRA_PARAMS=rootwait
   fi
 
-  cat > "${root}/boot/grub2/grub.cfg" << EOF
+  cat > "${mp}/boot/grub2/grub.cfg" << EOF
 # Begin /boot/grub2/grub.cfg
 
 set default=0
@@ -70,7 +114,7 @@ if [ -f  ${BOOT_DIRECTORY}systemd.cfg ]; then
 else
     set systemd_cmdline=net.ifnames=0
 fi
-set rootpartition=PARTUUID=$PART_UUID
+set rootpartition=PARTUUID=$ROOT_UUID
 
 menuentry "Photon" {
     linux ${BOOT_DIRECTORY}\$photon_linux root=\$rootpartition \$photon_cmdline \$systemd_cmdline $EXTRA_PARAMS
@@ -80,79 +124,54 @@ menuentry "Photon" {
 }
 # End /boot/grub2/grub.cfg
 EOF
-}
-
-function convert() {
-  local mount=$1
-  local vmdk=$2
-  local boot="${3:-}"
-  local mp=$(mktemp -d)
-  cd "${PACKAGE}"
   
-  # get size using a cpio archive
-  (
-      cd "$mount"
-      find . | cpio -o >"${PACKAGE}/$vmdk.img.cpio"
-  )
-  root_disk_size=$(stat -c %s "${PACKAGE}/$vmdk.img.cpio")
-  root_disk_size=$(((root_disk_size+1024)/1024*1024))
-  four_kilo=$((4*1024*1024))
-  if [ $((root_disk_size)) -lt $((four_kilo)) ];  then
-    root_disk_size=$four_kilo
-  fi
-  log3 "root size on disk is $root_disk_size"
-  disk_size=$(((root_disk_size+(1*1024*1024*1024))/1024*1024)) # add 1GB buffer and round for boot
+#   ./grub-mkimage -O x86_64-efi -d /grub-lib/grub/x86_64-efi -o /grub-lib/BOOTX64.EFI -p /EFI/BOOT ${GRUB_MODULES} linuxefi;
 
-  log3 "allocating raw image of ${brprpl}${disk_size}${reset}"
-  fallocate -l "$disk_size" -o 1024 "$vmdk.img"
-  
-  # partition disk
-  log3 "wiping existing filesystems"
-  sgdisk -Z -og "$vmdk.img"
-
-  #################################### partition setup
-  part_num=1
-  UUID=$(cat /proc/sys/kernel/random/uuid)
-  if [[ -n $boot ]]; then
-    export BOOT_UUID=UUID
+  grub2-efi-mkimage \
+        -d /usr/lib/grub/x86_64-efi \
+        -o ${mpboot}/EFI/BOOT/BOOTX64.EFI \
+        -p /EFI/BOOT \
+        -O x86_64-efi \
+        part_gpt fat ext2 iso9660 gzio linux acpi normal cpio crypto disk boot \
+        crc64 search_fs_uuid tftp verify video
     
-    log3 "creating bios boot partition"
-    sgdisk -n $part_num:2048:+2M -c $part_num:"BIOS Boot" -t $part_num:ef02 -u $part_num:$UUID "$vmdk.img"
+  cat <<EOF > ${mpboot}/EFI/BOOT/grub.cfg
+search -n -u ${ROOT_UUID} --set prefix
+configfile (\$prefix)/boot/grub2/grub.cfg
+EOF
 
-    part_num=$((part_num+1))
-    UUID=$(cat /proc/sys/kernel/random/uuid)
-  fi
+  ls -lRha $mpboot 1>&2
 
-  log3 "creating linux partition"
-  sgdisk -N $part_num -c $part_num:"Linux system" -t $part_num:8300 -u $part_num:$UUID "$vmdk.img"
-
-  #################################### extract root fs
-  fallocate -l "$root_disk_size" -o 1024 "$vmdk.img.root"
-  log3 "formatting linux partition"
-  mkfs.ext4 -F "$vmdk.img.root"
-
-  log3 "copying root fs"
-  mount -o loop "$vmdk.img.root" "$mp"
-  (
-      cd "$mp"
-      cpio -id < "${PACKAGE}/$vmdk.img.cpio"
-  )
-
-  ################################### extract boot efi
-  if [[ -n $boot ]]; then
-    log3 "setup grup on boot disk"
-    setup_grub "$mp" "$BOOT_UUID" "$UUID"
-    grub2-mkimage -O i386-pc -o "$vmdk.img.boot" -p "${mp}/boot" -c ${mp}/boot/grub2/grub.cfg part_gpt gfxterm vbe tga png ext2
-  fi
+  umount "$mpboot"
   umount "$mp"
 
+  
+  #################################### partition setup
+  boot_size=$(stat -c %s "$vmdk.img.boot")
+  boot_size_kb=$(( ( ( ($boot_size+1024-1) / 1024 ) + 1024-1) / 1024 * 1024 ))
+  boot_size_sectors=$(( $boot_size_kb * 2 ))
+
+  root_size=$(stat -c %s "$vmdk.img.root")
+  root_size_kb=$(( ( ( ($root_size+1024-1) / 1024 ) + 1024-1) / 1024 * 1024 ))
+  root_size_sectors=$(( $root_size_kb * 2 ))
+
+  disk_size=$(((boot_size+root_size+(4*1024*1024))/1024*1024))
+  
+  log3 "allocating raw image of ${brprpl}${disk_size}${reset}"
+  dd if=/dev/zero of="$vmdk.img" bs=1M count=$((disk_size/(1024*1024)))
+
+  log3 "creating partition table"
+
+  sgdisk --clear \
+    --new 1:2048:$((2048+boot_size_sectors-1)) --typecode=1:ef00 --change-name=1:'EFI System' --partition-guid=1:$BOOT_UUID --attributes 1:set:2 \
+    --new 2:$((2048+boot_size_sectors)):-0 --typecode=2:8300 --change-name=2:'Linux system' --partition-guid=2:$ROOT_UUID \
+    $vmdk.img
+
+  sgdisk -p $vmdk.img 1>&2
+
   ################################# burn raw image
-  if [[ -n "$boot" ]]; then
-    dd if="$vmdk.img.boot" of="$vmdk.img" bs=512 count=2M conv=notrunc seek=2048
-    dd if="$vmdk.img.root" of="$vmdk.img" bs=512 conv=notrunc seek=6144 #2048+2M=6144
-  else
-    dd if="$vmdk.img.root" of="$vmdk.img" bs=512 conv=notrunc
-  fi
+  dd if="$vmdk.img.boot" of="$vmdk.img" bs=512 conv=notrunc count=$boot_size_sectors seek=2048
+  dd if="$vmdk.img.root" of="$vmdk.img" bs=512 conv=notrunc count=$root_size_sectors seek=$((2048+boot_size_sectors))
 
   log3 "converting raw image ${brprpl}${vmdk}.img${reset} into ${brprpl}${vmdk}${reset}"
   qemu-img convert -f raw -O vmdk -o 'compat6,adapter_type=lsilogic,subformat=streamOptimized' "$vmdk.img" "$vmdk"
@@ -218,9 +237,9 @@ elif [ "${ACTION}" == "export" ]; then
   log1 "export images to VMDKs"
   for i in "${!IMAGES[@]}"; do
     log2 "exporting ${IMAGES[$i]} to ${IMAGES[$i]}.vmdk"
-    BOOT=""
-    [ "$i" == "0" ] && BOOT="1"
-    convert "${PACKAGE}/${IMAGEROOTS[$i]}" "${IMAGES[$i]}.vmdk" $BOOT
+    if [ "$i" == "0" ]; then
+        convert_with_efi "${PACKAGE}/${IMAGEROOTS[$i]}" "${IMAGES[$i]}.vmdk" 
+    fi # else convert "${PACKAGE}/${IMAGEROOTS[$i]}" "${IMAGES[$i]}.vmdk" 
   done
 
   log2 "VMDK Sizes"
