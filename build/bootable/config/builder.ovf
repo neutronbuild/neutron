@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ovf:Envelope xmlns="http://schemas.dmtf.org/ovf/envelope/1" xmlns:ovf="http://schemas.dmtf.org/ovf/envelope/1" xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData" xmlns:vmw="http://www.vmware.com/schema/ovf" xmlns:vssd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_VirtualSystemSettingData" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <References>
-    <File ovf:href="appliance-disk1.vmdk" ovf:id="system.vmdk_id" ovf:size="3276522496" />
-    <File ovf:href="appliance-disk2.vmdk" ovf:id="data.vmdk_id"   ovf:size="274432" />
+    <File ovf:href="appliance-disk1.vmdk" ovf:id="system.vmdk_id" ovf:size="0" />
+    <File ovf:href="appliance-disk2.vmdk" ovf:id="data.vmdk_id"   ovf:size="0" />
   </References>
   <NetworkSection>
     <Info>List of logical networks used in the package</Info>
@@ -268,7 +268,7 @@ EVALUATION LICENSE. If You are licensing the Software for evaluation purposes, Y
         <rasd:Description xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData">SCSI Controller</rasd:Description>
         <rasd:ElementName xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData">SCSI Controller 0</rasd:ElementName>
         <rasd:InstanceID xmlns:rasd="http://schemas.dmtf.org/wbem/wscim/1/cim-schema/2/CIM_ResourceAllocationSettingData">4</rasd:InstanceID>
-        <rasd:ResourceSubType>VirtualSCSI</rasd:ResourceSubType>
+        <rasd:ResourceSubType>lsilogic</rasd:ResourceSubType>
         <rasd:ResourceType>6</rasd:ResourceType>
       </Item>
       <Item>

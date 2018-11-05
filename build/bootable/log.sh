@@ -59,20 +59,27 @@ function log () {
 
     shift $((OPTIND-1))
 
-    echo -ne "${escape}${text_styles[$STYLE]}${text_colors[$COLOR]}m$*${reset}${break}" | tee /dev/fd/3 2>/dev/null || true;
+    (
+        echo -ne "${escape}${text_styles[$STYLE]}${text_colors[$COLOR]}m$*${reset}${break}" >/dev/fd/3 || true;
+        echo -ne "$*${break}" 
+    )  2>/dev/null
+
 }
 
 function log1 () {
+    set +x
     log -nc default -s bold "$(date +"%Y-%m-%d %H:%M:%S") "
     log -c green -s bold "[=] $*"
 }
 
 function log2 () {
+    set +x
     log -nc default -s bold "$(date +"%Y-%m-%d %H:%M:%S") "
     log -c yellow -s bold " [==] $*"
 }
 
 function log3() {
+    set +x
     log -nc default -s bold "$(date +"%Y-%m-%d %H:%M:%S") "
     log -c blue  "  [===] $*"
 }

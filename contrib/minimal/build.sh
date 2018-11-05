@@ -8,7 +8,6 @@ BUILD_OVA_REVISION="${TAG}-${BUILD_NUMBER}-${REV}"
 
 docker run -it --rm \
   --privileged \
-  -v /dev:/dev \
   -v $(pwd):/build/out/ \
   -e BUILD_OVA_REVISION=${BUILD_OVA_REVISION} \
   -e TERM \
