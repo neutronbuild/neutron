@@ -13,13 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this file generates vmdk disks from raw blobs and a grub uefi bootloader
+# this file generates vmdk disks from raw blobs and a grub bios bootloader
 set -e -o pipefail +h && [ -n "$DEBUG" ] && set -x
 DIR=$(dirname "$(readlink -f "$0")")
 . "${DIR}/log.sh"
 
 
-function convert_with_efi() {
+function convert_with_bios() {
   local mount=$1
   local vmdk=$2
   cd "${PACKAGE}"
@@ -46,7 +46,7 @@ function convert_with_efi() {
   #################################### extract root fs
   log3 "formatting linux partition"  
   dd if=/dev/zero of="$vmdk.img.root" bs=1M count=$((root_disk_size/(1024*1024)))
-  mkfs.ext4 -F "$vmdk.img.root"
+  mkfs.ext4 -F -L "neutronroot" "$vmdk.img.root"
 
   log3 "copying root fs"
   mp=$(mktemp -d)
@@ -58,20 +58,11 @@ function convert_with_efi() {
   )
 
 
-  ################################### extract boot efi
-  log3 "formatting boot partition"
-  mkfs.vfat -C "$vmdk.img.boot" 10240 #10M
-
-  log3 "setup grup on boot disk"
-  mpboot=$(mktemp -d)
-  mount -o loop "$vmdk.img.boot" "$mpboot"
-  
-  mkdir -p ${mpboot}/EFI/BOOT
+  ################################### extract boot bios
+  log3 "setup grup on root disk"
   
   mkdir -p "${mp}/boot/grub2"
   ln -sfv grub2 "${mp}/boot/grub"
-
-  BOOT_DIRECTORY=/boot/
 
   log3 "configure grub"
   rm -rf "${mp}/boot/grub2/fonts"
@@ -92,8 +83,8 @@ function convert_with_efi() {
 
 set default=0
 set timeout=5
-search -n -u $BOOT_UUID -s
-loadfont ${BOOT_DIRECTORY}grub2/ascii.pf2
+search --label neutronroot
+loadfont /boot/grub2/ascii.pf2
 
 insmod gfxterm
 insmod vbe
@@ -107,53 +98,30 @@ gfxpayload=keep
 
 terminal_output gfxterm
 
-set theme=${BOOT_DIRECTORY}grub2/themes/photon/theme.txt
-load_env -f ${BOOT_DIRECTORY}photon.cfg
-if [ -f  ${BOOT_DIRECTORY}systemd.cfg ]; then
-    load_env -f ${BOOT_DIRECTORY}systemd.cfg
+set theme=/boot/grub2/themes/photon/theme.txt
+load_env -f /boot/photon.cfg
+if [ -f  /boot/systemd.cfg ]; then
+    load_env -f /boot/systemd.cfg
 else
     set systemd_cmdline=net.ifnames=0
 fi
 set rootpartition=PARTUUID=$ROOT_UUID
 
 menuentry "Photon" {
-    linux ${BOOT_DIRECTORY}\$photon_linux root=\$rootpartition \$photon_cmdline \$systemd_cmdline $EXTRA_PARAMS
-    if [ -f ${BOOT_DIRECTORY}\$photon_initrd ]; then
-        initrd ${BOOT_DIRECTORY}\$photon_initrd
+    linux /boot/\$photon_linux root=\$rootpartition \$photon_cmdline \$systemd_cmdline $EXTRA_PARAMS
+    if [ -f /boot/\$photon_initrd ]; then
+        initrd /boot/\$photon_initrd
     fi
 }
 # End /boot/grub2/grub.cfg
 EOF
   
-#   ./grub-mkimage -O x86_64-efi -d /grub-lib/grub/x86_64-efi -o /grub-lib/BOOTX64.EFI -p /EFI/BOOT ${GRUB_MODULES} linuxefi;
 
-  grub2-efi-mkimage \
-        -d /usr/lib/grub/x86_64-efi \
-        -o ${mpboot}/EFI/BOOT/BOOTX64.EFI \
-        -p /EFI/BOOT \
-        -O x86_64-efi \
-        part_gpt fat ext2 iso9660 gzio linux acpi normal cpio crypto disk boot \
-        crc64 search_fs_uuid tftp verify video
-    
-  cat <<EOF > ${mpboot}/EFI/BOOT/grub.cfg
-search -n -u ${ROOT_UUID} --set prefix
-configfile (\$prefix)/boot/grub2/grub.cfg
-EOF
-
-  ls -lRha $mpboot 1>&2
-
-  umount "$mpboot"
-  umount "$mp"
-
-  
-  #################################### partition setup
-  boot_size=$(stat -c %s "$vmdk.img.boot")
+  #################################### partition size setup
+  boot_size=$((4*1024*1024))
   boot_size_kb=$(( ( ( ($boot_size+1024-1) / 1024 ) + 1024-1) / 1024 * 1024 ))
-  boot_size_sectors=$(( $boot_size_kb * 2 ))
 
   root_size=$(stat -c %s "$vmdk.img.root")
-  root_size_kb=$(( ( ( ($root_size+1024-1) / 1024 ) + 1024-1) / 1024 * 1024 ))
-  root_size_sectors=$(( $root_size_kb * 2 ))
 
   disk_size=$(((boot_size+root_size+(4*1024*1024))/1024*1024))
   
@@ -163,15 +131,27 @@ EOF
   log3 "creating partition table"
 
   sgdisk --clear \
-    --new 1:2048:$((2048+boot_size_sectors-1)) --typecode=1:ef00 --change-name=1:'EFI System' --partition-guid=1:$BOOT_UUID --attributes 1:set:2 \
-    --new 2:$((2048+boot_size_sectors)):-0 --typecode=2:8300 --change-name=2:'Linux system' --partition-guid=2:$ROOT_UUID \
+    --new 1:2048:$((2048+boot_size_kb-1)) --typecode=1:ef02 --change-name=1:'BIOS System' --partition-guid=1:$BOOT_UUID \
+    --new 2:$((2048+boot_size_kb)):-0 --typecode=2:8300 --change-name=2:'Linux system' --partition-guid=2:$ROOT_UUID \
     $vmdk.img
 
   sgdisk -p $vmdk.img 1>&2
 
+  disk=$(losetup -f -P --show "$vmdk.img")
+    
+  grub2-install \
+    --target=i386-pc \
+    --modules "part_gpt gfxterm vbe tga png ext2" \
+    --no-floppy \
+    --force \
+    --boot-directory="${mp}/boot" "$disk"
+
+  losetup -d $disk
+  umount "$mp"
+
+  echo "root -- $((2048+boot_size_kb))" 1>&2
   ################################# burn raw image
-  dd if="$vmdk.img.boot" of="$vmdk.img" bs=512 conv=notrunc count=$boot_size_sectors seek=2048
-  dd if="$vmdk.img.root" of="$vmdk.img" bs=512 conv=notrunc count=$root_size_sectors seek=$((2048+boot_size_sectors))
+  dd if="$vmdk.img.root" of="$vmdk.img" bs=512 conv=notrunc seek=$((2048+boot_size_kb))
 
   log3 "converting raw image ${brprpl}${vmdk}.img${reset} into ${brprpl}${vmdk}${reset}"
   qemu-img convert -f raw -O vmdk -o 'compat6,adapter_type=lsilogic,subformat=streamOptimized' "$vmdk.img" "$vmdk"
@@ -238,7 +218,7 @@ elif [ "${ACTION}" == "export" ]; then
   for i in "${!IMAGES[@]}"; do
     log2 "exporting ${IMAGES[$i]} to ${IMAGES[$i]}.vmdk"
     if [ "$i" == "0" ]; then
-        convert_with_efi "${PACKAGE}/${IMAGEROOTS[$i]}" "${IMAGES[$i]}.vmdk" 
+        convert_with_bios "${PACKAGE}/${IMAGEROOTS[$i]}" "${IMAGES[$i]}.vmdk" 
     fi # else convert "${PACKAGE}/${IMAGEROOTS[$i]}" "${IMAGES[$i]}.vmdk" 
   done
 
