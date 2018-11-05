@@ -18,6 +18,67 @@ set -e -o pipefail +h && [ -n "$DEBUG" ] && set -x
 DIR=$(dirname "$(readlink -f "$0")")
 . "${DIR}/log.sh"
 
+function convert() {
+  local mount=$1
+  local vmdk=$2
+  cd "${PACKAGE}"
+  
+  # get size using a cpio archive
+  (
+      cd "$mount"
+      find . | cpio -o >"${PACKAGE}/$vmdk.img.cpio"
+  )
+  root_disk_size=$(stat -c %s "${PACKAGE}/$vmdk.img.cpio")
+  root_disk_size=$(((root_disk_size+(1*1024))/1024*1024))
+  four_mb=$((4*1024*1024))
+  if [ $((root_disk_size)) -lt $((four_mb)) ];  then
+    root_disk_size=$four_mb
+  fi
+  log3 "root size on disk is $root_disk_size"
+
+
+  #################################### partition setup
+  ROOT_UUID=$(cat /proc/sys/kernel/random/uuid)
+
+
+  #################################### extract root fs
+  log3 "formatting linux partition"  
+  dd if=/dev/zero of="$vmdk.img.root" bs=1M count=$((root_disk_size/(1024*1024)))
+  mkfs.ext4 -F -L "neutronroot" "$vmdk.img.root"
+
+  log3 "copying root fs"
+  mp=$(mktemp -d)
+
+  mount -o loop "$vmdk.img.root" "$mp"
+  (
+      cd "$mp"
+      cpio -id < "${PACKAGE}/$vmdk.img.cpio"
+  )
+
+
+  #################################### partition setup
+  disk_size=$(((root_disk_size+(2*1024*1024))/1024*1024))
+  
+  log3 "allocating raw image of ${brprpl}${disk_size}${reset}"
+  dd if=/dev/zero of="$vmdk.img" bs=1M count=$((disk_size/(1024*1024)))
+
+  log3 "creating partition table"
+
+  sgdisk --clear \
+    --new 1:2048:-0 --typecode=1:8300 --change-name=1:'Linux system' --partition-guid=1:$ROOT_UUID \
+    $vmdk.img
+
+  sgdisk -p $vmdk.img
+
+  umount "$mp"
+
+  ################################# burn raw image
+  dd if="$vmdk.img.root" of="$vmdk.img" bs=512 conv=notrunc seek=$((2048))
+
+  log3 "converting raw image ${brprpl}${vmdk}.img${reset} into ${brprpl}${vmdk}${reset}"
+  qemu-img convert -f raw -O vmdk -o 'compat6,adapter_type=lsilogic,subformat=streamOptimized' "$vmdk.img" "$vmdk"
+  rm "$vmdk".img*
+}
 
 function convert_with_bios() {
   local mount=$1
@@ -135,7 +196,7 @@ EOF
     --new 2:$((2048+boot_size_kb)):-0 --typecode=2:8300 --change-name=2:'Linux system' --partition-guid=2:$ROOT_UUID \
     $vmdk.img
 
-  sgdisk -p $vmdk.img 1>&2
+  sgdisk -p $vmdk.img
 
   disk=$(losetup -f -P --show "$vmdk.img")
     
@@ -149,7 +210,7 @@ EOF
   losetup -d $disk
   umount "$mp"
 
-  echo "root -- $((2048+boot_size_kb))" 1>&2
+  echo "root -- $((2048+boot_size_kb))"
   ################################# burn raw image
   dd if="$vmdk.img.root" of="$vmdk.img" bs=512 conv=notrunc seek=$((2048+boot_size_kb))
 
@@ -219,7 +280,9 @@ elif [ "${ACTION}" == "export" ]; then
     log2 "exporting ${IMAGES[$i]} to ${IMAGES[$i]}.vmdk"
     if [ "$i" == "0" ]; then
         convert_with_bios "${PACKAGE}/${IMAGEROOTS[$i]}" "${IMAGES[$i]}.vmdk" 
-    fi # else convert "${PACKAGE}/${IMAGEROOTS[$i]}" "${IMAGES[$i]}.vmdk" 
+    else
+        convert "${PACKAGE}/${IMAGEROOTS[$i]}" "${IMAGES[$i]}.vmdk" 
+    fi
   done
 
   log2 "VMDK Sizes"

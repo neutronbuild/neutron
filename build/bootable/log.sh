@@ -59,8 +59,11 @@ function log () {
 
     shift $((OPTIND-1))
 
-    echo -ne "${escape}${text_styles[$STYLE]}${text_colors[$COLOR]}m$*${reset}${break}" > /dev/fd/3 2>/dev/null || true;
-    echo -ne "$*${break}" 
+    (
+        echo -ne "${escape}${text_styles[$STYLE]}${text_colors[$COLOR]}m$*${reset}${break}" >/dev/fd/3 || true;
+        echo -ne "$*${break}" 
+    )  2>/dev/null
+
 }
 
 function log1 () {

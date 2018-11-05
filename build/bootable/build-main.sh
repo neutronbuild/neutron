@@ -95,22 +95,14 @@ function build_app {
 function main {
     PACKAGE=$(mktemp -d)
 
-    # IMAGES=(
-    #     "appliance-disk1"
-    #     "appliance-disk2"
-    # )
-    # IMAGEFILES=("${IMAGES[@]/%/".vmdk"}")
-    # IMAGEROOTS=(
-    #     "/mnt/root"
-    #     "/mnt/data"
-    # )
-
     IMAGES=(
         "appliance-disk1"
+        "appliance-disk2"
     )
     IMAGEFILES=("${IMAGES[@]/%/".vmdk"}")
     IMAGEROOTS=(
         "/mnt/root"
+        "/mnt/data"
     )
 
     IMAGEARGS=("${IMAGES[@]/#/"-i"}" "${IMAGEROOTS[@]/#/"-r"}")
@@ -141,7 +133,7 @@ function main {
 
     # install app dependencies and setup rootfs
     log1 "Installing application layer"
-    mkdir -p "${PACKAGE}/mnt/data"
+
     build_app "${PACKAGE}/mnt/root" "${PACKAGE}/mnt/data"
 
     # package
