@@ -80,6 +80,7 @@ function convert() {
   rm "$vmdk".img*
 }
 
+# requires grub2-efi package
 function convert_with_efi() {
   local mount=$1
   local vmdk=$2
@@ -134,7 +135,7 @@ function convert_with_efi() {
 
   log3 "configure grub"
   rm -rf "${mp}/boot/grub2/fonts"
-  cp "${DIR}/boot/ascii.pf2" "${mp}/boot/grub2/"
+  cp "${DIR}/boot/unifont.pf2" "${mp}/boot/grub2/"
   mkdir -p "${mp}/boot/grub2/themes/photon"
   cp "${DIR}"/boot/splash.png "${mp}/boot/grub2/themes/photon/photon.png"
   cp "${DIR}"/boot/terminal_*.tga "${mp}/boot/grub2/themes/photon/"
@@ -152,34 +153,30 @@ function convert_with_efi() {
 set default=0
 set timeout=5
 search --label neutronroot --set prefix
-loadfont (\$prefix)/boot/grub2/ascii.pf2
+if loadfont (\$prefix)/boot/grub2/unifont.pf2
+then
+    insmod gfxterm
+    insmod gfxmenu
+    insmod gfxterm_background
+    set gfxmode=640x480
+    set gfxpayload=keep
+    terminal_output gfxterm  
+fi
 
-insmod gfxterm
-insmod vbe
+insmod efi_gop
+insmod efi_uga
+insmod font
 insmod tga
 insmod png
 insmod ext2
 insmod part_gpt
 
-set gfxmode="640x480"
-gfxpayload=keep
-
-terminal_output gfxterm
-
 set theme=(\$prefix)/boot/grub2/themes/photon/theme.txt
 load_env -f (\$prefix)/boot/photon.cfg
-if [ -f  (\$prefix)/boot/systemd.cfg ]; then
-    load_env -f (\$prefix)/boot/systemd.cfg
-else
-    set systemd_cmdline=net.ifnames=0
-fi
-set rootpartition=PARTUUID=$ROOT_UUID
 
+set rootpartition=PARTUUID=$ROOT_UUID
 menuentry "Photon" {
     linux (\$prefix)/boot/\$photon_linux root=\$rootpartition \$photon_cmdline \$systemd_cmdline $EXTRA_PARAMS
-    if [ -f (\$prefix)/boot/\$photon_initrd ]; then
-        initrd (\$prefix)/boot/\$photon_initrd
-    fi
 }
 # End (\$prefix)/boot/grub2/grub.cfg
 EOF
@@ -195,8 +192,8 @@ EOF
         -o ${mpboot}/EFI/BOOT/BOOTX64.EFI \
         -p /EFI/BOOT \
         -O x86_64-efi \
-        part_gpt fat ext2 iso9660 gzio linux acpi normal cpio crypto disk boot crc64 \
-        search_fs_uuid tftp verify video gfxterm tga png configfile search
+        part_gpt fat ext2 iso9660 gzio linux video acpi normal cpio crypto disk boot crc64 loadenv \
+        search_fs_uuid tftp verify gfxmenu gfxterm tga png configfile search efi_uga efi_gop
 
   umount "$mpboot"
   umount "$mp"
@@ -434,7 +431,7 @@ elif [ "${ACTION}" == "export" ]; then
   for i in "${!IMAGES[@]}"; do
     log2 "exporting ${IMAGES[$i]} to ${IMAGES[$i]}.vmdk"
     if [ "$i" == "0" ]; then
-        convert_with_bios "${PACKAGE}/${IMAGEROOTS[$i]}" "${IMAGES[$i]}.vmdk" 
+        convert_with_efi "${PACKAGE}/${IMAGEROOTS[$i]}" "${IMAGES[$i]}.vmdk" 
     else
         convert "${PACKAGE}/${IMAGEROOTS[$i]}" "${IMAGES[$i]}.vmdk" 
     fi
