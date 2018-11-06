@@ -10,6 +10,16 @@ RUN set -eux; \
 RUN set -eux; \
     curl -L'#' -k https://storage.googleapis.com/golang/go$GOVERSION.linux-amd64.tar.gz | tar xzf - -C /usr/local;
 
+RUN set -eux; \
+    curl -fSL \
+        "https://github.com/genuinetools/img/releases/download/v0.5.2/img-linux-amd64" \
+        -o "/usr/local/bin/img"; \
+	chmod a+x "/usr/local/bin/img"
+
+# mkdir -p /etc/cache/docker/
+# img pull $img
+# img save $img > /etc/cache/docker/$img
+
 COPY ./build/ /build/
 COPY ./bin/ovfenv ./bin/dcui ./bin/rpctool /build/bin/
 
